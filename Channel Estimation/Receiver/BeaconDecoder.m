@@ -1,40 +1,101 @@
-% Define parameters
-centerFreq = 2.412e9; % Center frequency for Wi-Fi channel 1 (2.4 GHz band)
-sampleRate = 20e6;   % Sample rate (20 MHz)
-captureTime = 10;    % Capture duration in seconds
-gain = 30;           % Receiver gain (adjust as needed)
+% ------------ SDR Parameters ------------
+centerFreq = 2.412e9;       % Channel 1 (2.4 GHz band)
+sampleRate = 20e6;          % 20 MHz bandwidth for 802.11n
+captureTime = 10;           % Duration in seconds
+gain = 30;                  % Adjust as needed
+samplesPerFrame = 2048;
 
-% Create SDRuReceiver object
-rx = comm.SDRuReceiver(...
+% ------------ SDRu Receiver Setup ------------
+rx = comm.SDRuReceiver( ...
     'Platform', 'B210', ...
-    'SerialNum', '30F59A1', ... % Replace with your USRP B210 serial number
+    'SerialNum', '30F59A1', ... % Replace with your USRP B210 serial
     'CenterFrequency', centerFreq, ...
     'SampleRate', sampleRate, ...
     'Gain', gain, ...
-    'SamplesPerFrame', 1024, ...
+    'SamplesPerFrame', samplesPerFrame, ...
     'EnableTimestamps', true, ...
-    'ClockSource', 'Internal', ...
-    'PPSSource', 'None');
+    'OutputDataType', 'double');
 
-% Initialize variables
-numFrames = ceil(captureTime * sampleRate / 1024);
+% ------------ Constants ------------
+stf = generate80211nSTF();   % 802.11n STF
+ltf = generate80211nLTF();   % 802.11n L-LTF
+corrThreshold = 0.6;
+numFrames = ceil(captureTime * sampleRate / samplesPerFrame);
 beaconCount = 0;
 
-% Loop to receive and process frames
-for frameIdx = 1:numFrames
-    % Receive data
-    [rxData, ~, ts] = rx();
-    
-    % Process the received data (e.g., detect and decode beacon frames)
-    % This is a placeholder for your beacon detection and decoding logic
-    % Example: if detectBeacon(rxData)
-    %              beaconCount = beaconCount + 1;
-    %              fprintf('Beacon detected at timestamp %.6f\n', ts);
-    %          end
+% ------------ Main Loop ------------
+fprintf('\n📡 Starting capture...\n\n');
+for k = 1:numFrames
+    [rxData, len, ts] = rx();
+    if len == 0
+        continue;
+    end
+
+    % Normalize
+    rxData = rxData / max(abs(rxData));
+
+    % Detect packet via STF correlation
+    corr = abs(conv(conj(flip(stf)), rxData));
+    [peakVal, peakIdx] = max(corr);
+
+    if peakVal > corrThreshold
+        fprintf('✅ Beacon detected at frame %d | Timestamp: %.6f\n', k, ts);
+        beaconCount = beaconCount + 1;
+
+        % Extract LTF assuming packet alignment
+        ltfStart = peakIdx + length(stf);  % After STF
+        ltfLength = 160;  % 2 x 64-sample symbols + 16-sample CPs
+
+        if ltfStart + ltfLength - 1 <= length(rxData)
+            ltfRx = rxData(ltfStart : ltfStart + ltfLength - 1);
+
+            % Remove CP and split
+            N = 64; cpLen = 16;
+            ltf1 = ltfRx(cpLen + (1:N));
+            ltf2 = ltfRx(cpLen + N + cpLen + (1:N));
+
+            % Channel Estimation
+            H1 = fft(ltf1);
+            H2 = fft(ltf2);
+            Havg = (H1 + H2) / 2;
+
+            % Print Channel Info
+            fprintf('🔍 Channel Magnitude (|H|):\n');
+            disp(abs(Havg).');
+
+            fprintf('🔍 Channel Phase (∠H) [radians]:\n');
+            disp(angle(Havg).');
+        end
+    end
 end
 
-% Release the receiver
+% ------------ Wrap up ------------
 release(rx);
+fprintf('\n📊 Total beacons detected: %d\n', beaconCount);
 
-% Display the number of detected beacons
-fprintf('Total beacons detected: %d\n', beaconCount);
+%% ------------ Helper Functions ------------
+
+function stf = generate80211nSTF()
+    % 802.11n STF same as 802.11a/g
+    freqDomain = zeros(1,64);
+    indices = [-24:-1 1:24] + 33;  % MATLAB 1-based
+    bpsk = [1 -1 1 1 -1 1 1 1 -1 -1 1 -1 1 -1 1 1 ...
+           -1 1 -1 1 -1 1 1 1 1 1 -1 -1 1 1 -1 -1 ...
+            1 -1 -1 -1 -1 1 -1 1 1 1 -1 -1 -1 1 1 -1];
+    freqDomain(indices) = bpsk;
+    timeDomain = ifft(ifftshift(freqDomain));
+    stf = repmat(timeDomain(1:16), 1, 10);  % 10 short symbols
+end
+
+function ltf = generate80211nLTF()
+    % 802.11n Legacy Long Training Field (same as 802.11a LTF)
+    freqDomain = zeros(1,64);
+    indices = [-26:-1 1:26] + 33;  % MATLAB 1-based
+    ltfBpsk = [1 -1 1 1 -1 1 1 1 -1 -1 1 -1 1 -1 1 1 ...
+               -1 1 -1 1 -1 1 1 1 1 1 -1 -1 1 1 -1 -1 ...
+                1 -1 -1 -1 -1 1 -1 1 1 1 -1 -1 -1 1 1 -1 ...
+               1];  % 53 subcarriers, DC omitted
+    freqDomain(indices) = ltfBpsk;
+    timeDomain = ifft(ifftshift(freqDomain));
+    ltf = [timeDomain(49:64), timeDomain, timeDomain];  % CP + 2 LTFs
+end
