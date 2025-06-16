@@ -1,4 +1,4 @@
-Code to do channel setimation between two USRP B210s connected together through a cable.
+Code to do channel estimation between two USRP B210s connected together through a cable.
 
 Transmitter side cabled on RF A TX/RX
 
