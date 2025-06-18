@@ -133,6 +133,7 @@ demodSig = wlanLLTFDemodulate(nonHTFields(idxLLTF(1):idxLLTF(2), :), cfgNonHT);
 H_hat = wlanLLTFChannelEstimate(demodSig, cfgNonHT);
 subcarrier_index = [(6:31) (33:58)] + 1;
 
+%% Visualization
 figure(1)
 subplot(3,1,1)
 plot(10*log10(real(H).^2),'DisplayName','True Channel, R'); hold on; grid on;
