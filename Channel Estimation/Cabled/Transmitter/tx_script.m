@@ -50,7 +50,7 @@ Nfft = 64;
 
 % Defining the nnumber of discrete-time multipaths, L = 1 means no multipath, pure AWGN
 L = 4; % Number of discrete-time multipaths, L = 1 means no multipath, pure AWGN
-channel_pdp = [1 0.3 0.1 0.05]; %  Power delay profile for each of the multipaths
+channel_pdp = [1 0.3 0.1 0.05]'; %  Power delay profile for each of the multipaths
 noise_power = .001; % Noise Power
 delay = randi(100); 
 
@@ -113,7 +113,7 @@ idxLLTF = wlanFieldIndices(cfgNonHT, 'L-LTF');
 ind = wlanFieldIndices(cfgNonHT);
 
 
-rfRxFreq = Rc; 
+rfRxFreq = fc; 
 
 % Coarse Packet Detection - Roughly detects the start of a packet and
 % extracts the preamble from the WLAN packet
