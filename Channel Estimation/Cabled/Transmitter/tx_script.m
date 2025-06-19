@@ -1,8 +1,8 @@
 clc;
 clear;
-
 %% Creating Beacon Frame
 % Defining the beacon signal parameters
+
 ssid = "TEST_BEACON";
 beaconInterval = 1;
 band = 2.4;
@@ -27,12 +27,13 @@ beaconFrameConfig = wlanMACFrameConfig(FrameType="Beacon", ...
 
 % Calculating center frequency for the specified operating band and channel number.
 fc = wlanChannelFrequency(chNum,band);
-
-
 %% Creating Beacon Packet
-% Configuring a non-HT beacon packet with the relevant PSDU length, specifying a channel bandwidth of 20 MHz, one transmit antenna,
-% and BPSK modulation with a coding rate of 1/2 (corresponding to MCS index 0) by using the wlanNonHTConfig object.
-cfgNonHT = wlanNonHTConfig(PSDULength=61);
+% Configuring a non-HT beacon packet with the relevant PSDU length, specifying 
+% a channel bandwidth of 20 MHz, one transmit antenna, and BPSK modulation with 
+% a coding rate of 1/2 (corresponding to MCS index 0) by using the wlanNonHTConfig 
+% object.
+
+cfgNonHT = wlanNonHTConfig(PSDULength=mpduLength);
 
 % Generating an oversampled beacon packet by using the wlanWaveformGenerator function, specifying an idle time.
 osf = 1;
@@ -42,10 +43,10 @@ txWaveform = wlanWaveformGenerator(mpduBits,cfgNonHT,...
 
 % Getting the waveform sample rate.
 Rs = wlanSampleRate(cfgNonHT,OversamplingFactor=osf);
-
 %% Creating Channel (for simulation)
-% Defining the number of subcarriers that the total bandwidth is to be split into i.e.
-% number of discrete FFT channels
+% Defining the number of subcarriers that the total bandwidth is to be split 
+% into i.e. number of discrete FFT channels
+
 Nfft = 64;
 
 % Defining the nnumber of discrete-time multipaths, L = 1 means no multipath, pure AWGN
@@ -73,23 +74,22 @@ H = fftshift(fft(h,Nfft)); % Converting the impulse response into frequency resp
 figure
 plot(10*log10(abs(H).^2))
 title('Channel in Frequency Domain')
-
 %% Additional Signal Transformations for testing
 % Padding 0s before the packet to validate packet detection index.
+
 rxWaveform = [zeros(delay, 1); txWaveform];
 rxWaveform = conv(rxWaveform,h); % Signal after channel
 rxWaveform = rxWaveform + (sqrt(noise_power/2) * (randn(size(rxWaveform)) + 1i * randn(size(rxWaveform)))); %  Adding complex Additive White Gaussian Noise (AWGN) to simulate real-world channel noise.
-
 %% Transmitting data
-txWaveform = rxWaveform;
 
+SamplingRate = 20e6;
 % Defining USRP transmit characteristics
 tx = comm.SDRuTransmitter(...
     'Platform', 'B210', ...
-    'SerialNum', '344C57A', ...
+    'SerialNum', '344C4DE', ...
     'CenterFrequency', fc, ...
     'MasterClockRate', Rs, ...
-    'Gain', 50, 'InterpolationFactor', 1); % Adjust gain as needed
+    'Gain', 50, 'InterpolationFactor', SamplingRate/Rs); % Adjust gain as needed
 
 % Normalizing the data to be transmitted
 txWaveform = txWaveform./max(abs(txWaveform));
@@ -103,10 +103,9 @@ for k = 1:Nsig
 end
 % Release the transmitter when done
 release(tx);
-
-
 %% Expected Receiver Behavior
-rxData = rxWaveform;
+
+rxData = txWaveform;
 % Calculate the index points for different fields in the Preamble
 idxLLTF = wlanFieldIndices(cfgNonHT, 'L-LTF');
 % Get non-HT fields
@@ -132,8 +131,8 @@ demodSig = wlanLLTFDemodulate(nonHTFields(idxLLTF(1):idxLLTF(2), :), cfgNonHT);
 % Get channel estimation using the L-LTF
 H_hat = wlanLLTFChannelEstimate(demodSig, cfgNonHT);
 subcarrier_index = [(6:31) (33:58)] + 1;
-
 %% Visualization
+
 figure(1)
 subplot(3,1,1)
 plot(10*log10(real(H).^2),'DisplayName','True Channel, R'); hold on; grid on;
