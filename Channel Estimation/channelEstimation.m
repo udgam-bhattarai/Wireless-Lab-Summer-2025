@@ -1,11 +1,12 @@
 clc;
-% clear;
+clear;
 %% Define USRP or Simulation
-useUSRP = true;
-transmit = true;
 
-%% Creating Beacon Frame
+useUSRP = true;
+transmit = false;
+%% Creating Beacon 
 % Defining the beacon signal parameters
+
 ssid = "TEST_BEACON";
 beaconInterval = 0;
 band = 2.4;
@@ -31,11 +32,12 @@ beaconFrameConfig = wlanMACFrameConfig(FrameType="Beacon", ...
 
 % Calculating center frequency for the specified operating band and channel number.
 fc = wlanChannelFrequency(chNum,band);
+% Creating Beacon Packet
+% Configuring a non-HT beacon packet with the relevant PSDU length, specifying 
+% a channel bandwidth of 20 MHz, one transmit antenna, and BPSK modulation with 
+% a coding rate of 1/2 (corresponding to MCS index 0) by using the wlanNonHTConfig 
+% object.
 
-
-%% Creating Beacon Packet
-% Configuring a non-HT beacon packet with the relevant PSDU length, specifying a channel bandwidth of 20 MHz, one transmit antenna,
-% and BPSK modulation with a coding rate of 1/2 (corresponding to MCS index 0) by using the wlanNonHTConfig object.
 cfgNonHT = wlanNonHTConfig(PSDULength = 61);
 
 % Generating an oversampled beacon packet by using the wlanWaveformGenerator function, specifying an idle time.
@@ -46,31 +48,17 @@ txWaveform = wlanWaveformGenerator(mpduBits,cfgNonHT,...
 
 % Getting the waveform sample rate.
 Rs = wlanSampleRate(cfgNonHT,OversamplingFactor=osf);
-
-%% Transmitting data
-% txWaveform = txWaveform;
+%% Transmitting data 
 % Defining USRP transmit characteristics
-if(useUSRP)
-    try 
-        usrp = findsdru;
-        if (usrp.Status ~= "Success")
-            disp('USRP is busy. Proceeding with simulation mode.');
-            useUSRP = false;
-        end
-    catch
-        warning('USRP not found. Proceeding with simulation mode.');
-        useUSRP = false;
-    end
-end 
 
-if (useUSRP)
+if(useUSRP)
     if(transmit)
         tx = comm.SDRuTransmitter(...
-            'Platform', usrp.Platform, ...
-            'SerialNum', usrp.SerialNum, ...                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ', ...
+            'Platform', 'B210', ...
+            'SerialNum', '344C57A', ...                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ', ...
             'CenterFrequency', fc, ...
-            'MasterClockRate', 10e6, ...
-            'Gain', 89, 'InterpolationFactor', 1); % Adjust gain as needed
+            'MasterClockRate', 20e6, ...
+            'Gain', 60, 'InterpolationFactor', 1); %#ok<*UNRCH> % Adjust gain as needed
         
         % Normalizing the data to be transmitted
         txWaveform = txWaveform./max(abs(txWaveform));
@@ -90,9 +78,11 @@ if (useUSRP)
 
     if ~(transmit) %receive
         Beacon_detected = 0;
-        Nrx = 5000;
+        Nrx = 1000;
         SSIDs = cell(1, Nrx);
-        
+        CRC_Pass = 0;
+        capture_time = 0.005;
+        total_noise=0;
         % Packet Detection
         rfRxFreq = 2.437e9; % Center frequency
         packetsDetected = 0; % Number of packets detected
@@ -100,8 +90,8 @@ if (useUSRP)
         
         % must match transmitter side, except gain
         rx = comm.SDRuReceiver( ...
-            'Platform', usrp.Platform, ...
-            'SerialNum', usrp.SerialNum, ... % can be found by running findsdru in terminal
+            'Platform', 'B210', ...
+            'SerialNum', '344C57A', ... % can be found by running findsdru in terminal
             'MasterClockRate', 20e6, ...
             'CenterFrequency', rfRxFreq, ...
             'Gain', 60, ...
@@ -109,26 +99,28 @@ if (useUSRP)
             'DecimationFactor', 1,...   
             'ReceiveAntennaPort','RX2');
         
-        %% Samples Collection
         
+
+%% Receiving Data
+
         % For each sample
         for i = 1:Nrx
             disp(i / Nrx);
-            [rxData, ~] = capture(rx, 0.005, 'Seconds');
+            [rxData, ~] = capture(rx, capture_time, 'Seconds');
              startOffset1 = wlanPacketDetect(rxData, 'CBW20', 0, 0.5);
             % Detect the packet      
-                % No packet detected (rudimentary). If high, likely no packet detected
-                if ~isempty(startOffset1) && startOffset1 < (size(rxData,1) - ind.NonHTData(2))
+                % if empty no packet detected. if > packet clipped or noise
+                if ~isempty(startOffset1) && startOffset1 < (size(rxData,1) - ind.NonHTData(2)) %beginning index of packet+end index must be less than total data length 
+
                    
                     idxLLTF = wlanFieldIndices(cfgNonHT, 'L-LTF'); % Calculate the LLTF index points
                     coarseFrame = rxData(startOffset1 + (ind.LSTF(1):ind.LSIG(2)), :);
                     startOffset2 = wlanSymbolTimingEstimate(coarseFrame, "CBW20"); % Finer preamble detection
         
-                    if startOffset2 > 1
+                    if startOffset2 >= 0
                         packetsDetected = packetsDetected + 1;
                         % If startOffset2 is negative, packet detection likely failed
                         fineFrame = rxData(startOffset1 + startOffset2 + (ind.LSTF(1):ind.NonHTData(2)), :);
-                        
                      
                         % Demodulate the LLTF
                         demodLLTF = wlanLLTFDemodulate(fineFrame(idxLLTF(1):idxLLTF(2), :), cfgNonHT);
@@ -138,32 +130,41 @@ if (useUSRP)
                         H_hat = zeros(64, 1);
                         H_hat(subcarrier_index) = wlanLLTFChannelEstimate(demodLLTF, cfgNonHT); % Channel Estimation LTF
                         noiseEst = wlanLLTFNoiseEstimate(demodLLTF);
+                        total_noise = total_noise + noiseEst;
                         DataField = wlanNonHTDataRecover(fineFrame(ind.NonHTData(1):ind.NonHTData(2),:),H_hat(subcarrier_index),noiseEst,cfgNonHT);
+                        %CRC error check
                         [cfgMAC,payload,status] = wlanMPDUDecode(DataField,cfgNonHT);
-                        cfgMAC.ManagementConfig.SSID
-                        if matches(cfgMAC.FrameType,"Beacon")
-                            Beacon_detected = Beacon_detected + 1;
-                            SSIDs{Beacon_detected} = cfgMAC.ManagementConfig.SSID;
+                        disp( cfgMAC.ManagementConfig.SSID);
+                        if strcmp(status, 'Success') %CRC check
+                            disp("CRC Passed");
+                            CRC_Pass = CRC_Pass+1;
+                            if matches(cfgMAC.FrameType,"Beacon")
+                                disp("Beacon Detected");
+                                Beacon_detected = Beacon_detected + 1;
+                                SSIDs{Beacon_detected} = cfgMAC.ManagementConfig.SSID;
+                            end
+                            figure(1)
+                            subplot(1, 2, 1)
+                            plot(10 * log10(abs(H_hat).^2), '-', 'DisplayName', 'Estimated Channel, abs');
+            
+                            if(Beacon_detected>0)
+                                title(SSIDs{Beacon_detected});
+                            end
+                            ylim([-40 0])
+                            h_hat = ifft(fftshift(H_hat));
+                            subplot(1, 2, 2)
+                            plot(abs(h_hat));
+                            ylim([0 0.15])
+                            drawnow;
+            
+                            % Performance metrics
+                            estimated_delay = startOffset1 + startOffset2;
+                            disp(['Estimated delay: ' num2str(estimated_delay)]);
+                            pause(0.01)
+                            disp(['Packet detected: ' num2str(i)])
+                        else
+                            disp("Failed CRC");
                         end
-                        figure(1)
-                        subplot(1, 2, 1)
-                        plot(10 * log10(abs(H_hat).^2), '-', 'DisplayName', 'Estimated Channel, abs');
-        
-                        if(Beacon_detected>0)
-                            title(SSIDs{Beacon_detected});
-                        end
-                        ylim([-40 0])
-                        h_hat = ifft(fftshift(H_hat));
-                        subplot(1, 2, 2)
-                        plot(abs(h_hat));
-                        ylim([0 0.15])
-                        drawnow;
-        
-                        % Performance metrics
-                        estimated_delay = startOffset1 + startOffset2;
-                        disp(['Estimated delay: ' num2str(estimated_delay)]);
-                        pause(0.01)
-                        disp(['Packet detected: ' num2str(i)])
                     else
                         disp(['Packet not detected ' num2str(i)])
                         pause(0.001)
@@ -176,23 +177,44 @@ if (useUSRP)
         
         release(rx);
         
-        %% Probability of Detection
-        disp(['Probability of Packet Detection:', num2str(packetsDetected/Nrx)])
+% Probability of Detection
+Test_Beacons =0;
+for i=1:size(SSIDs,2)
+     if strcmp(SSIDs{i}, 'TEST_BEACON')
+        Test_Beacons = Test_Beacons + 1;
     end
 end
-  
+disp('Per loop: ');
+disp(['Percent of Packet Detection per loop: ', num2str(100*packetsDetected/Nrx)]);
+disp(['Percent of CRC PASS out of loop: ', num2str(100*CRC_Pass/Nrx)]);
+disp(['Percent of Beacon Detection per loop:', num2str(100*Beacon_detected/Nrx)]);
+disp('');
 
-%% Simulation Side
+disp('Per packet: ')
+disp(['Percent of CRC PASS out of packets: ', num2str(100*CRC_Pass/packetsDetected)]);
+disp(['Percent of Beacons out of packets: ', num2str(100*Beacon_detected/packetsDetected)]);
+disp('');
+disp('Per Beacon: ')
+disp(['Percent of Test Beacon out of Beacons: ', num2str(100*Test_Beacons/Beacon_detected)]);
+disp(['Packets detected per second: ', num2str(packetsDetected/(capture_time*Nrx))]);
+disp(['Beacons detected per second: ', num2str(Beacon_detected/(capture_time*Nrx))]);
+disp(['Test Beacons detected per second: ', num2str(Test_Beacons/(capture_time*Nrx))]);
+disp(['Average Noise is: ' num2str(total_noise/packetsDetected)]);
+    end
+end
+%% Simulation 
+
 if  ~(useUSRP)
-    %% Additional Signal Transformations for testing
-    % Padding 0s before the packet to validate packet detection index.
+% Additional Signal Transformations for testing
+% Padding 0s before the packet to validate packet detection index.
+
     rxWaveform = [zeros(delay, 1); txWaveform];
     rxWaveform = conv(rxWaveform(:), H); % Signal after channel
     rxWaveform = rxWaveform + (sqrt(noise_power/2) * (randn(size(rxWaveform)) + 1i * randn(size(rxWaveform)))); %  Adding complex Additive White Gaussian Noise (AWGN) to simulate real-world channel noise.
+% Creating Channel
+% Defining the number of subcarriers that the total bandwidth is to be split 
+% into i.e. number of discrete FFT channels
 
-    %% Creating Channel (for simulation)
-    % Defining the number of subcarriers that the total bandwidth is to be split into i.e.
-    % number of discrete FFT channels
     Nfft = 64;
     
     % Defining the nnumber of discrete-time multipaths, L = 1 means no multipath, pure AWGN
@@ -221,7 +243,8 @@ if  ~(useUSRP)
     plot(10*log10(abs(H).^2))
     title('Channel in Frequency Domain')
     
-    %% Channel Estimation for Simulation
+% Channel Estimation
+
     rxData = rxWaveform;
     % Calculate the index points for different fields in the Preamble
     idxLLTF = wlanFieldIndices(cfgNonHT, 'L-LTF');
@@ -256,4 +279,4 @@ if  ~(useUSRP)
     
     ylim([-40 20])
     legend('location','best')
-end 
+end
