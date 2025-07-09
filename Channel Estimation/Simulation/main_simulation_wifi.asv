@@ -1,0 +1,192 @@
+clc
+clear all
+close all
+
+% this script simulated the following:
+% - wifi TX signal
+% - low-pass filter effect -> which is very important to be considered
+% - continutous-time channel general with normalized delay and path gain
+% - CFO and integer delay to test wifi synchronization
+%      -> obs.: maybe we will need to check CFO correction
+% - received signal after low-pass filter effect
+% - wifi synchronization and channel estimation
+% - channel estimation adaptation to fit Mf samples -> the current setting
+% is 53 subcarriers
+% - integration of superresolution estimation (SDE)
+%   -> we can maybe adapt the algorithm to doppler estimation
+
+% how to run the code
+% 1. requirement
+% -> clone the project "FR3 Sounder V2"
+% -> run the script "add_to_path"
+%
+% 2. Part 1. configuration -> get familiar
+%
+% 3. Part 2. TX-CHANNEL-RX 
+%   -> this is what we had before + new channel simulation
+%   -> run it and understand the plots
+%   -> please, use this code as a reference  with your other simulations, keep the code
+%   modular and easy to follow
+%
+% 4. Part 3. supperresolution estimator (SRE) integrated 
+%   -> run it and understand the plot
+%
+% 5. Part 4. SRE taking multiple channel estimated as input
+%  -> this is the most effective way to running the SRE
+%  -> get familiar with the system
+%
+% 6. Part 5. To be done by Andrew/Udgam
+%  -> integrate the USRP with SRE
+%
+% Roberto, 09/Jul/25
+% 
+
+%% PART 1. CONFIGURATION
+% parameters wifi
+p.wifi.beaconInterval = 1;
+p.wifi.band = 2.4;
+p.wifi.chNum = 6;
+
+% include all useful parameters in the struct p
+p = load_wifi_config(p);
+
+% parameters channel
+p.ch_param.L = 3;
+p.ch_param.delay_first = 3.45;
+p.ch_param.delay_max = 8;
+p.ch_param.cfo = 0;
+p.ch_param.integer_delay = 10;
+p.ch_param.snr_dB = 20; %
+p.ch_param.decay_rate = 2;
+
+% general parameters
+p.Nfft = 64;
+p.sre.Mf = 53; % number of allocated carriers + 1
+p.sre.n_shift = p.ch_param.delay_first-1;
+p.sre.L_search = 4; % number of paths that the algorithm will search
+p.delay_factor = p.Nfft/p.sre.Mf; % correct delay after carrier allocation
+p.sre.N_group = 8;
+
+rng(10)
+
+% enable/disable plots
+is_plot = true;
+
+% load band pass filter functions
+p.filter.a = 0.25; % roll off -> imporant to
+p = load_filter(p,is_plot);
+
+% load superresolution estimator (sre) parameters
+[gen_param,meas_param] = load_sre_param(p);
+
+%% PART 2. TX-CHANNEL-RX, WIFI CHANNEL ESTIMATION (wifi scripts developted by Andrew/Udgam + channel simulation by Roberto) 
+% tx
+p = generate_tx_signal_wifi(p,is_plot);
+
+% channel
+p = generate_channel(p,is_plot);
+
+% rx signal
+p = generate_rx_signal(p,is_plot);
+
+% estimate channel wifi
+p = estimate_channel(p,is_plot);
+
+%% PART 3. + SUPERRESOLUTION INTEGRATION (new part from Roberto)
+% format estimated channel by adding missing sample
+p = format_estimated_channel(p,false);
+
+% ini variables
+gen_param = ini_variables(gen_param);
+
+gen_param.enable_dmc_est = false; % keep DMC estimation false when using a single channel
+
+gen_param.X = p.X;
+[gen_param,gen_param.X] = align_measurements(gen_param,gen_param.X);
+
+% inicial estimate of noise
+gen_param = estimate_noise_power(gen_param,false);
+
+
+gen_param.index_x = 1;
+[gen_param,output_valid] = search_paths_test(gen_param.X,gen_param);
+
+if output_valid
+    gen_param = update_batch(gen_param);
+end
+
+fig_i = 6;
+plot_sre_wifi(p,gen_param,fig_i)
+
+% return;
+
+%% PART 4. SUPERRESOLUTION ESTIMATION IN THE LOOP, TAKING MULTIPLE CH-EST AS INPUT
+N_out = 100;
+
+for k = 1:N_out
+
+    p.X = [];
+
+    % generate N_sig received signals to be used in the SRE, the channel is
+    % the same but the AWGN changes
+    % N_sig = 1, SRE uses only 1 measurement without memory
+    % N_sig = p.sre.N_group + 16; SRE uses many measurements, which allows
+    % DMC estimation, in practice N_sig > N_group is preffered
+    gen_param.N_group = 8;
+    N_sig = p.sre.N_group + 16;
+
+    for i = 1:N_sig
+
+        % rx signal
+        p = generate_rx_signal(p,false);
+
+        % estimate channel wifi
+        p = estimate_channel(p,false);
+
+        % format estimated channel by adding missing sample
+        p = format_estimated_channel(p,false);
+    end
+
+    if size(p.X,2) <= p.sre.N_group
+        gen_param.enable_dmc_est = false;
+    else
+        gen_param.enable_dmc_est = true;
+    end
+
+    % superresolution estimation (SRE)
+    gen_param = ini_variables(gen_param);
+
+    gen_param.X = p.X;
+    [gen_param,gen_param.X] = align_measurements(gen_param,gen_param.X);
+
+    % inicial estimate of noise
+    gen_param = estimate_noise_power(gen_param,false);
+
+    if gen_param.enable_dmc_est
+        n_vec = 1:size(gen_param.X,2) - gen_param.N_group;
+    else
+        n_vec = 1:size(gen_param.X,2);
+    end
+
+    for n = n_vec
+        gen_param.index_x = n;
+        [gen_param,output_valid] = search_paths_test(gen_param.X,gen_param);
+
+        if output_valid
+            gen_param = update_batch(gen_param);
+        end
+
+        fig_i = 6;
+        plot_sre_wifi(p,gen_param,fig_i)
+    end
+
+end
+
+%% PART 5 INTEGRATE THE USRP WITH THE SRE
+% recommentation:
+% - use the Part 4 example
+% - get the CSI from the USRP using "estimate_channel" and
+% "format_estimated_channel" in the loop
+% - process the data "p.X" as done in the Part 4.
+% - enable DMC estimation
+% - plot_sre_wifi helps you understand the parameters being estimated

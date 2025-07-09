@@ -1,6 +1,7 @@
 clc;
 clear;
 clf;
+close all;
 
 %% Creating Beacon Frame
 % Defining the beacon signal parameters
@@ -78,7 +79,7 @@ title('Channel in Frequency Domain');
 %% Additional Signal Transformations for testing
 % Padding 0s before the packet to validate packet detection index.
 rxWaveform = [zeros(delay, 1); txWaveform];
-rxWaveform = conv(rxWaveform(:), H); % Signal after channel
+rxWaveform = conv(rxWaveform(:), h); % Signal after channel
 rxWaveform = rxWaveform + (sqrt(noise_power/2) * (randn(size(rxWaveform)) + 1i * randn(size(rxWaveform)))); %  Adding complex Additive White Gaussian Noise (AWGN) to simulate real-world channel noise.
 
 %% Receiving data
