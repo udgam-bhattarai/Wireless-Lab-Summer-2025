@@ -1,5 +1,8 @@
 
-fileID = fopen("csi_2023_10_16_1.txt");
+ function array = parsedata(filename)
+
+
+fileID = fopen(filename);
 data= cell2mat(textscan(fileID, "%f"));
 packetsize = 268;
 activeindeces = [7:32, 34:59];
@@ -23,6 +26,7 @@ antenna3 = antenna3(activeindeces);
 antenna4 = csi_raw(193:256);
 antenna4 = antenna4(activeindeces);
 
-
+array = [antenna1, antenna2, antenna3, antenna4];
+ end
 
 
