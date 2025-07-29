@@ -1,6 +1,9 @@
-data = load('csi_2023_10_16_1.txt');
+
+fileID = fopen("csi_2023_10_16_1.txt");
+data= cell2mat(textscan(fileID, "%f"));
 packetsize = 268;
 activeindeces = [7:32, 34:59];
+
 packet = data(1:packetsize);
 timestamp = packet(1:3);        % [hour, min, sec]
 rssi = packet(4:7);            % 4 RSSI values
