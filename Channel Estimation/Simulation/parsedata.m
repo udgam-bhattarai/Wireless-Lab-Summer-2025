@@ -1,5 +1,4 @@
-
- function array = parsedata(filename)
+function array = parsedata(filename, packet_num)
 
 
 fileID = fopen(filename);
@@ -7,12 +6,17 @@ data= cell2mat(textscan(fileID, "%f"));
 packetsize = 268;
 activeindeces = [7:32, 34:59];
 
-packet = data(1:packetsize);
-timestamp = packet(1:3);        % [hour, min, sec]
-rssi = packet(4:7);            % 4 RSSI values
-mcs = packet(8);               % Single MCS value
-gain = packet(9:12);           % 4 gain values
-csi_raw = packet(13:268); % 256 CSI values
+start_idx = (packet_num-1) * packetsize + 1;
+end_idx = packet_num * packetsize;
+
+packet = data(start_idx:end_idx);
+
+% Extract components from the packet
+timestamp = packet(1:3);     % [hour, min, sec]
+rssi = packet(4:7);          % 4 RSSI values
+mcs = packet(8);             % Single MCS value
+gain = packet(9:12);         % 4 gain values
+csi_raw = packet(13:268);    % 256 CSI values (indices 13 to 268)
 
 antenna1 = csi_raw(1:64);
 antenna1 = antenna1(activeindeces);
@@ -27,6 +31,6 @@ antenna4 = csi_raw(193:256);
 antenna4 = antenna4(activeindeces);
 
 array = [antenna1, antenna2, antenna3, antenna4];
- end
 
 
+end
