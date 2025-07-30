@@ -1,5 +1,4 @@
-
- function array = parsedata(filename, numpackets)
+function array = parsedata(filename, numpackets)
 
 
 fileID = fopen(filename);
