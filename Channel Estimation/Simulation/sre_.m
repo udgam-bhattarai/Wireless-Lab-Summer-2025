@@ -29,20 +29,23 @@ function estimation = sre_(csi_data)
     
     % enable/disable plots
     is_plot = true;
-    
-    csi_data = [csi_data; csi_data(end)];
-        
+
+    % Debugging
+    p.est.sc_index = [(6:31) (33:58)] + 1;
+    p.est.H_hat = csi_data;
+ 
+    p = format_estimated_channel(p, false);
+
     % Loading SRE parameters
     [gen_param, ~] = load_sre_param(p);
     
-    gen_param.X = csi_data;
+    gen_param.X = p.X;
     
     % ini variables
     gen_param = ini_variables(gen_param);
     
     gen_param.enable_dmc_est = false; % keep DMC estimation false when using a single channel
-    
-    gen_param.X = csi_data;
+
     [gen_param,gen_param.X] = align_measurements(gen_param,gen_param.X);
     
     % inicial estimate of noise
