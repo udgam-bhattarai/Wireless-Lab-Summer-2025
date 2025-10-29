@@ -55,21 +55,24 @@ tx = comm.SDRuTransmitter( ...
     SerialNum = usrp.SerialNum, ...
     CenterFrequency = txCenterFrequency, ...
     Gain = txGain, ...
-    MasterClockRate = 20e6);
+    MasterClockRate = 16e6,...
+    InterpolationFactor = 2);
 
 currentFrame = 1;
 
-try 
-    while currentFrame <= txNumberofFrames
-        tx(txWaveform);
-        currentFrame = currentFrame + 1;
-    end
-catch ME
-    fprintf("Error during USRP Transmission");
-    exit;
+% try 
+%     while currentFrame <= txNumberofFrames
+%         tx(txWaveform);
+%         currentFrame = currentFrame + 1;
+%     end
+% catch ME
+%     fprintf("Error during USRP Transmission");
+%     exit;
+% end 
+
+
+for i = 1:1000000
+    tx(txWaveform);
 end 
 
 release(tx);
-for i = 1:10000
-    tx(txWaveform);
-end 
