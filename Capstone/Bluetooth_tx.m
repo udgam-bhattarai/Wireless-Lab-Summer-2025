@@ -39,6 +39,7 @@ txCenterFrequency = 2.402e9;        % In Hz
 txFrameLength = length(txWaveform);
 txNumberOfFrames = 1e4;
 txFrontEndSampleRate = sampleRate;
+txGain = 75;
 
 
 try 
@@ -69,3 +70,6 @@ catch ME
 end 
 
 release(tx);
+for i = 1:10000
+    tx(txWaveform);
+end 
