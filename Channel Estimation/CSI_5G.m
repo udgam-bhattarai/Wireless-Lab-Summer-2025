@@ -1,0 +1,175 @@
+%% Script A: 5G Transmitter (USRP Tx)
+clc; clear; close all;
+
+% --- 1. 5G Configuration ---
+carrier = nrCarrierConfig;
+carrier.SubcarrierSpacing = 15;
+carrier.NSizeGrid = 52;
+
+csirs = nrCSIRSConfig;
+csirs.CSIRSType = {'nzp','nzp','nzp'};
+csirs.RowNumber = [4 4 4]; 
+csirs.NumRB = 52;
+csirs.RBOffset = 0;
+csirs.CSIRSPeriod = [4 0];      % Transmit every 4 slots
+csirs.SymbolLocations = {0, 0, 0};
+csirs.Density = {'one','one','one'};
+csirs.SubcarrierLocations = {0, 4, 8};
+
+% --- 2. Waveform Generation ---
+% We generate 1 frame (10ms). The USRP will repeat this seamlessly.
+framesToGen = 1;
+slotsPerFrame = carrier.SlotsPerFrame;
+totSlotsGen = framesToGen * slotsPerFrame;
+txGridVolume = [];
+
+disp('Generating 5G Waveform...');
+for nslot = 0:totSlotsGen-1
+    carrier.NSlot = nslot;
+    slotGrid = nrResourceGrid(carrier, csirs.NumCSIRSPorts(1));
+    csirsInd = nrCSIRSIndices(carrier,csirs);
+    csirsSym = nrCSIRS(carrier,csirs);
+    if ~isempty(csirsInd)
+        slotGrid(csirsInd) = csirsSym;
+    end
+    txGridVolume = [txGridVolume slotGrid]; %#ok<AGROW>
+end
+
+% Modulate and Normalize
+txWaveform = nrOFDMModulate(carrier, txGridVolume);
+scaleFactor = 0.8 / max(abs(txWaveform(:)));
+txWaveform = txWaveform * scaleFactor;
+
+% --- 3. USRP Hardware Setup ---
+waveformInfo = nrOFDMInfo(carrier);
+sampleRate = waveformInfo.SampleRate; % Approx 15.36 MSps
+centerFreq = 2.4e9;
+masterClock = 30.72e6; % B210 Standard
+interp = masterClock / sampleRate;
+
+disp(['Configuring USRP Tx at ' num2str(sampleRate/1e6) ' MSps...']);
+txRadio = comm.SDRuTransmitter(...
+    'Platform',             'B210', ...
+    'SerialNum',            '', ...         % Add Serial if multiple connected
+    'ChannelMapping',       1, ...
+    'CenterFrequency',      centerFreq, ...
+    'Gain',                 70, ...         % High Tx Gain
+    'MasterClockRate',      masterClock, ...
+    'InterpolationFactor',  interp);
+
+% --- 4. Start Transmission ---
+disp('Transmitting... (Press Ctrl+C to stop)');
+transmitRepeat(txRadio, txWaveform);
+
+
+
+
+
+%% Script B: 5G Receiver (USRP Rx) & Processing
+clc; clear; close all;
+
+% --- 1. 5G Configuration (Must match Tx) ---
+carrier = nrCarrierConfig;
+carrier.SubcarrierSpacing = 15;
+carrier.NSizeGrid = 52;
+
+csirs = nrCSIRSConfig;
+csirs.CSIRSType = {'nzp','nzp','nzp'};
+csirs.RowNumber = [4 4 4];
+csirs.NumRB = 52;
+csirs.RBOffset = 0;
+csirs.CSIRSPeriod = [4 0];
+csirs.SymbolLocations = {0, 0, 0};
+csirs.Density = {'one','one','one'};
+csirs.SubcarrierLocations = {0, 4, 8};
+
+% --- 2. USRP Hardware Setup ---
+waveformInfo = nrOFDMInfo(carrier);
+sampleRate = waveformInfo.SampleRate;
+centerFreq = 2.4e9;
+masterClock = 30.72e6;
+decimation = masterClock / sampleRate;
+
+disp('Configuring USRP Rx...');
+rxRadio = comm.SDRuReceiver(...
+    'Platform',             'B210', ...
+    'SerialNum',            '', ...        % Add Serial if multiple connected
+    'ChannelMapping',       1, ...
+    'CenterFrequency',      centerFreq, ...
+    'Gain',                 50, ...        % Rx Gain (Start mid-range)
+    'MasterClockRate',      masterClock, ...
+    'DecimationFactor',     decimation, ...
+    'SamplesPerFrame',      length(nrOFDMModulate(carrier, nrResourceGrid(carrier,1))) * 10 * 3); 
+    % We request 3 frames worth of samples to ensure we catch a full frame boundary
+
+% --- 3. Capture & Synchronization ---
+disp('Capturing signal...');
+rxWaveformFull = rxRadio(); % Capture 30ms of data
+release(rxRadio);
+
+disp('Synchronizing...');
+% Re-generate a clean reference waveform for correlation
+refGrid = nrResourceGrid(carrier, csirs.NumCSIRSPorts(1));
+% We just need one slot with CSI-RS for synchronization reference
+carrier.NSlot = 0; 
+refGrid(nrCSIRSIndices(carrier,csirs)) = nrCSIRS(carrier,csirs);
+refWaveform = nrOFDMModulate(carrier, refGrid);
+
+% A. Coarse Frequency Correction (Two USRPs always have drift!)
+frequencyOffset = nrFrequencyOffset(carrier, rxWaveformFull, refWaveform);
+rxWaveformFull = freqshift(rxWaveformFull, -frequencyOffset, sampleRate);
+disp(['Compensated Frequency Offset: ' num2str(frequencyOffset) ' Hz']);
+
+% B. Timing Synchronization
+[t, mag] = nrTimingEstimate(carrier, rxWaveformFull, refWaveform);
+startIdx = 1 + t;
+frameLenSamp = length(refWaveform) * 10; % Length of 10ms frame
+
+% Extract one aligned frame
+if startIdx + frameLenSamp > length(rxWaveformFull)
+    error('Sync found too late in capture. Try capturing again.');
+end
+rxWaveform = rxWaveformFull(startIdx : startIdx+frameLenSamp-1, :);
+
+% --- 4. Demodulation & Your Analysis Loop ---
+disp('Demodulating and Running User Loop...');
+rxGridVolume = nrOFDMDemodulate(carrier, rxWaveform);
+cdmLengths = getCDMLengths(csirs);
+symbolsPerSlot = carrier.SymbolsPerSlot;
+
+% Visualize the Grid to check if signal exists
+figure(1); imagesc(abs(rxGridVolume(:,:,1))); title('Rx Grid Magnitude (All Slots)');
+
+% Loop through the 10 slots in the captured frame
+for nslot = 0:9
+    carrier.NSlot = nslot;
+    
+    % 1. Extract the specific symbols for this slot from the volume
+    symStart = nslot * symbolsPerSlot + 1;
+    symEnd = symStart + symbolsPerSlot - 1;
+    rxGridPractical = rxGridVolume(:, symStart:symEnd, :);
+    
+    % 2. Generate Reference CSI-RS
+    csirsInd = nrCSIRSIndices(carrier,csirs);
+    csirsSym = nrCSIRS(carrier,csirs);
+    
+    % --- YOUR LOGIC ---
+    if ~isempty(csirsInd)
+        disp(['[Slot ' num2str(nslot) '] CSI-RS Detected. Estimating Channel...']);
+        
+        nzpCSIRSSym = csirsSym(csirsSym ~= 0);
+        nzpCSIRSInd = csirsInd(csirsSym ~= 0);
+        
+        [PracticalHest, nVarPractical] = nrChannelEstimate(carrier, rxGridPractical, ...
+            nzpCSIRSInd, nzpCSIRSSym, 'CDMLengths', cdmLengths, 'AveragingWindow', [0 5]);
+        
+        % Plot result for this slot
+        figure(2); 
+        surf(abs(PracticalHest(:,:,1,1))); 
+        title(['H_est Magnitude (Slot ' num2str(nslot) ')']);
+        shading interp; view(2); colorbar;
+        pause(0.5); 
+    else
+        % disp(['[Slot ' num2str(nslot) '] No CSI-RS.']);
+    end
+end
