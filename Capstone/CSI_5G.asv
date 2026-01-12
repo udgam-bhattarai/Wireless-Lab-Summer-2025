@@ -1,8 +1,8 @@
 
 
-clc; clear; close all;
+clc; clear; 
 
-receive = false;
+receive = true;
 
 if (~receive)
     carrier = nrCarrierConfig;
@@ -75,7 +75,7 @@ else
         'SerialNum',            usrp.SerialNum, ...       
         'ChannelMapping',       1, ...
         'CenterFrequency',      centerFreq, ...
-        'Gain',                 0, ...        % Rx Gain (Start mid-range)
+        'Gain',                 0, ...       
         'MasterClockRate',      masterClock, ...
         'DecimationFactor',     decimation, ...
         'SamplesPerFrame',      length(nrOFDMModulate(carrier, nrResourceGrid(carrier,1))) * 10 * 3); 

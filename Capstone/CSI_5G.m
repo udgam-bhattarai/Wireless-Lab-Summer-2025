@@ -1,8 +1,8 @@
 
 
-clc; clear; close all;
+clc; clear; 
 
-receive = false;
+receive = true;
 
 if (~receive)
     carrier = nrCarrierConfig;
@@ -64,6 +64,15 @@ if (~receive)
     % --- 4. Start Transmission ---
     disp('Transmitting... (Press Ctrl+C to stop)');
     transmitRepeat(txRadio, txWaveform);
+
+    Nsig = 10;
+    for k = 1:Nsig
+            tx(txWaveform);
+            disp(k/Nsig)
+     end
+        % Release the transmitter when done
+        release(tx);
+    
 
 
 
