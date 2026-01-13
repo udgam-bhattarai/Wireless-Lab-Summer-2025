@@ -2,7 +2,7 @@
 
 clc; clear; 
 
-receive = true;
+receive = false;
 
 if (~receive)
     carrier = nrCarrierConfig;
@@ -11,13 +11,13 @@ if (~receive)
     
     csirs = nrCSIRSConfig;
     csirs.CSIRSType = {'nzp','nzp','nzp'};
-    csirs.RowNumber = [4 4 4]; 
+    csirs.RowNumber = [1 1 1]; 
     csirs.NumRB = 52;
     csirs.RBOffset = 0;
     csirs.CSIRSPeriod = [4 0];      % Transmit every 4 slots
-    csirs.SymbolLocations = {0, 0, 0};
-    csirs.Density = {'one','one','one'};
-    csirs.SubcarrierLocations = {0, 4, 8};
+    csirs.SymbolLocations = {0, 6, 12};
+    csirs.Density = {'three','three','three'};
+    csirs.SubcarrierLocations = {0, 0, 0};
     
     % --- 2. Waveform Generation ---
     % We generate 1 frame (10ms). The USRP will repeat this seamlessly.
@@ -42,6 +42,7 @@ if (~receive)
     txWaveform = nrOFDMModulate(carrier, txGridVolume);
     scaleFactor = 0.8 / max(abs(txWaveform(:)));
     txWaveform = txWaveform * scaleFactor;
+    % txWaveform = txWaveform(:,1);
     
     % --- 3. USRP Hardware Setup ---
     waveformInfo = nrOFDMInfo(carrier);
@@ -57,21 +58,20 @@ if (~receive)
         'SerialNum',            usrp.SerialNum, ...        
         'ChannelMapping',       1, ...
         'CenterFrequency',      centerFreq, ...
-        'Gain',                 -10, ...         n
+        'Gain',                 30, ...         
         'MasterClockRate',      masterClock, ...
         'InterpolationFactor',  interp);
     
     % --- 4. Start Transmission ---
     disp('Transmitting... (Press Ctrl+C to stop)');
-    transmitRepeat(txRadio, txWaveform);
-
-    Nsig = 10;
+     duration = 1000;
+    Nsig = 100*duration;
     for k = 1:Nsig
-            tx(txWaveform);
+            txRadio(txWaveform);
             disp(k/Nsig)
      end
         % Release the transmitter when done
-        release(tx);
+        release(txRadio);
     
 
 
