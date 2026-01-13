@@ -4,22 +4,29 @@ clc; clear;
 
 receive = true;
 
-if (~receive)
     carrier = nrCarrierConfig;
     carrier.SubcarrierSpacing = 15;
     carrier.NSizeGrid = 52;
     
     csirs = nrCSIRSConfig;
     csirs.CSIRSType = {'nzp','nzp','nzp'};
-    csirs.RowNumber = [4 4 4]; 
+    csirs.RowNumber = [1 1 1]; 
     csirs.NumRB = 52;
     csirs.RBOffset = 0;
     csirs.CSIRSPeriod = [4 0];      % Transmit every 4 slots
-    csirs.SymbolLocations = {0, 0, 0};
-    csirs.Density = {'one','one','one'};
-    csirs.SubcarrierLocations = {0, 4, 8};
-    
-    % --- 2. Waveform Generation ---
+    csirs.SymbolLocations = {0, 6, 12};
+    csirs.Density = {'three','three','three'};
+    csirs.SubcarrierLocations = {0, 0, 0};
+
+    waveformInfo = nrOFDMInfo(carrier);
+    sampleRate = waveformInfo.SampleRate; % Approx 15.36 MSps
+    centerFreq = 2.4e9;
+    masterClock = 30.72e6; % B210 Standard
+    interp = masterClock / sampleRate;
+    decimation = masterClock / sampleRate;
+
+    usrp = findsdru;
+if (~receive)
     % We generate 1 frame (10ms). The USRP will repeat this seamlessly.
     framesToGen = 1;
     slotsPerFrame = carrier.SlotsPerFrame;
@@ -42,16 +49,9 @@ if (~receive)
     txWaveform = nrOFDMModulate(carrier, txGridVolume);
     scaleFactor = 0.8 / max(abs(txWaveform(:)));
     txWaveform = txWaveform * scaleFactor;
-    
-    % --- 3. USRP Hardware Setup ---
-    waveformInfo = nrOFDMInfo(carrier);
-    sampleRate = waveformInfo.SampleRate; % Approx 15.36 MSps
-    centerFreq = 2.4e9;
-    masterClock = 30.72e6; % B210 Standard
-    interp = masterClock / sampleRate;
+
     
     disp(['Configuring USRP Tx at ' num2str(sampleRate/1e6) ' MSps...']);
-    usrp = findsdru;
     txRadio = comm.SDRuTransmitter(...
         'Platform',             usrp.Platform, ...
         'SerialNum',            usrp.SerialNum, ...        
@@ -72,46 +72,41 @@ if (~receive)
      end
         % Release the transmitter when done
         release(tx);
-    
 
-
+%%
+% *RX* 
 
 else
 
     disp('Configuring USRP Rx...'); 
+    
     rxRadio = comm.SDRuReceiver(...
         'Platform',             usrp.Platform, ...
         'SerialNum',            usrp.SerialNum, ...       
         'ChannelMapping',       1, ...
         'CenterFrequency',      centerFreq, ...
-        'Gain',                 0, ...       
+        'Gain',                 40, ...       
         'MasterClockRate',      masterClock, ...
         'DecimationFactor',     decimation, ...
-        'SamplesPerFrame',      length(nrOFDMModulate(carrier, nrResourceGrid(carrier,1))) * 10 * 3); 
-        % We request 3 frames worth of samples to ensure we catch a full frame boundary
+        'SamplesPerFrame',      length(nrOFDMModulate(carrier, nrResourceGrid(carrier,1))) * 10 * 3,...
+        'OutputDataType','double'); 
+
     
-    % --- 3. Capture & Synchronization ---
+for i = 1:20
     disp('Capturing signal...');
-    rxWaveformFull = rxRadio(); % Capture 30ms of data
-    release(rxRadio);
+    rxWaveformFull = rxRadio();
+
     
     disp('Synchronizing...');
     % Re-generate a clean reference waveform for correlation
     refGrid = nrResourceGrid(carrier, csirs.NumCSIRSPorts(1));
-    % We just need one slot with CSI-RS for synchronization reference
-    carrier.NSlot = 0; 
     refGrid(nrCSIRSIndices(carrier,csirs)) = nrCSIRS(carrier,csirs);
     refWaveform = nrOFDMModulate(carrier, refGrid);
-    
-    % A. Coarse Frequency Correction (Two USRPs always have drift!)
-    frequencyOffset = nrFrequencyOffset(carrier, rxWaveformFull, refWaveform);
-    rxWaveformFull = freqshift(rxWaveformFull, -frequencyOffset, sampleRate);
-    disp(['Compensated Frequency Offset: ' num2str(frequencyOffset) ' Hz']);
-    
+
     % B. Timing Synchronization
-    [t, mag] = nrTimingEstimate(carrier, rxWaveformFull, refWaveform);
+    [t, mag] = nrTimingEstimate(carrier, rxWaveformFull, refGrid);
     startIdx = 1 + t;
-    frameLenSamp = length(refWaveform) * 10; % Length of 10ms frame
+    frameLenSamp = length(refWaveform) * 10; % Length of a frame
     
     % Extract one aligned frame
     if startIdx + frameLenSamp > length(rxWaveformFull)
@@ -127,11 +122,11 @@ else
     
     % Visualize the Grid to check if signal exists
     figure(1); imagesc(abs(rxGridVolume(:,:,1))); title('Rx Grid Magnitude (All Slots)');
-    
+    PracticalHest = zeros(624,14);
     % Loop through the 10 slots in the captured frame
     for nslot = 0:9
         carrier.NSlot = nslot;
-        
+       
         % 1. Extract the specific symbols for this slot from the volume
         symStart = nslot * symbolsPerSlot + 1;
         symEnd = symStart + symbolsPerSlot - 1;
@@ -140,6 +135,7 @@ else
         % 2. Generate Reference CSI-RS
         csirsInd = nrCSIRSIndices(carrier,csirs);
         csirsSym = nrCSIRS(carrier,csirs);
+    
         
         % --- YOUR LOGIC ---
         if ~isempty(csirsInd)
@@ -151,16 +147,27 @@ else
             [PracticalHest, nVarPractical] = nrChannelEstimate(carrier, rxGridPractical, ...
                 nzpCSIRSInd, nzpCSIRSSym, 'CDMLengths', cdmLengths, 'AveragingWindow', [0 5]);
             
-            % Plot result for this slot
-            figure(2); 
-            surf(abs(PracticalHest(:,:,1,1))); 
-            title(['H_est Magnitude (Slot ' num2str(nslot) ')']);
-            shading interp; view(2); colorbar;
-            pause(0.5); 
+            % % Plot result for this slot
+            % figure(2); 
+            % surf(abs(PracticalHest(:,:,1,1))); 
+            % title(['H_est Magnitude (Slot ' num2str(nslot) ')']);
+            % shading interp; view(2); colorbar;
+            % pause(0.5); 
+            % Plot the frequency response of the 1st symbol in the slot
+              plot(abs(PracticalHest(:, 1, 1, 1))); 
+                grid on;
+                title(['Channel Frequency Response (Symbol 0, Slot ' num2str(nslot) ')']);
+                xlabel('Subcarrier Index');
+                ylabel('Magnitude');
+                pause(0.5);
+            
         else
-            % disp(['[Slot ' num2str(nslot) '] No CSI-RS.']);
+             disp(['[Slot ' num2str(nslot) '] No CSI-RS.']);
         end
+      
     
+        end
+        
     end
-
-end
+release(rxRadio);
+end 
