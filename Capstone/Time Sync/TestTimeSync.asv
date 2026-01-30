@@ -1,0 +1,83 @@
+clear;
+usrp = findsdru;
+
+% Variables
+nrb = 20;
+scs = 15;
+ncellid = 42;
+ibar_SSB = 0;
+carrier = nrCarrierConfig('NSizeGrid',nrb,'SubcarrierSpacing',scs);
+dmrsSym = nrPBCHDMRS(ncellid,ibar_SSB);
+dmrsInd = nrPBCHDMRSIndices(ncellid);
+
+refGrid = nrResourceGrid(carrier, 1);
+refGrid(dmrsInd) = dmrsSym;
+refWaveform = nrOFDMModulate(carrier, refGrid);
+
+
+info = nrOFDMInfo(carrier);
+sampleRate = info.SampleRate;
+
+
+% Defining RX1
+fiveG_rxRadio = comm.SDRuReceiver( ...
+    'Platform',        usrp(1).Platform, ...
+    'SerialNum',       usrp(1).SerialNum, ...
+    'ChannelMapping',  1, ...
+    'CenterFrequency', 2.4e9, ...
+    'Gain',            30, ...
+    'MasterClockRate', 30.72e6, ...   % ↓ halve clock
+    'DecimationFactor',30.72e6 / sampleRate, ...          % keep math simple
+    'SamplesPerFrame', length(refWaveform) * 50, ...
+    'OutputDataType', 'single');
+
+% Defining RX2
+wifi_rxRadio = comm.SDRuReceiver( ...
+    'Platform',        usrp(2).Platform, ...
+    'SerialNum',       usrp(2).SerialNum, ...
+    'ChannelMapping',  1, ...
+    'CenterFrequency', 2.4e9, ...
+    'Gain',            30, ...
+    'MasterClockRate', 30.72e6, ...   % ↓ halve clock
+    'DecimationFactor',30.72e6 / sampleRate, ...          % keep math simple
+    'SamplesPerFrame', length(refWaveform) * 50, ...
+    'OutputDataType', 'single');
+figure;
+% Capture and Process 5G CSI data
+
+fiveG_rxRadio.ClockSource = 'External';
+fiveG_rxRadio.PPSSource   = 'External';
+
+wifi_rxRadio.ClockSource = 'External';
+wifi_rxRadio.PPSSource   = 'External';
+
+setHardwareTime(fiveG_rxRadio, 0);
+setHardwareTime(wifi_rxRadio, 0);
+
+fiveG_rxRadio.EnableTimeTrigger = true;
+wifi_rxRadio.EnableTimeTrigger = true;
+
+usrpTriggerTime = 10;   % future time in seconds
+fiveG_rxRadio.TriggerTime = usrpTriggerTime;
+wifi_rxRadio.TriggerTime = usrpTriggerTime;
+
+
+while true
+    rxBuf1 = fiveG_rxRadio();
+    rxBuf2 = wifi_rxRadio();
+    t1 = getHardwareTime(fiveG_rxRadio);
+    t2 = getHardwareTime(wifi_rxRadio);
+
+    timeOffset = t1 - t2;
+    fprintf('HW time offset: %.9f s\n', timeOffset);
+    subplot(2,1,1);
+    plot(abs(rxBuf1));
+    subplot(2,1,2);
+    plot(abs(rxBuf2));
+    title('Received Wifi Signal');
+    xlabel('Sample Index');
+    ylabel('Magnitude');
+    drawnow;
+    hold on;
+end
+hold off;
