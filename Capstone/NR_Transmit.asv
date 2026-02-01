@@ -32,7 +32,7 @@ if (~receive)
     % Scale waveform to prevent clipping on USRP
     txWaveform = txWaveform / max(abs(txWaveform));
 
-    for i = 1:10000000
+    for i = 1:100000
         txRadio(txWaveform);
         disp(1/i);
     end
