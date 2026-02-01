@@ -46,7 +46,7 @@ startOffset2 = wlanSymbolTimingEstimate(coarseFrame, 'CBW20');
 
 if isempty(startOffset2) || startOffset2 < 0
     warning("startoffset2 invalid");
-    return;
+    startOffset2=0;
 end
 
 if (startOffset1 + startOffset2 + ind.NonHTData(2)) > length(rxBuffer)
