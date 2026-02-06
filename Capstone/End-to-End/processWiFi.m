@@ -69,4 +69,22 @@ H_active = wlanLLTFChannelEstimate(demodLLTF, cfgNonHT);
 H = zeros(64,1,'like',H_active);
 H(subcarrier_index) = H_active;
 valid = true;
+
+% ---- Beacon verification (SSID) ----
+try
+    noiseEst = wlanLLTFNoiseEstimate(demodLLTF);
+
+    dataField = fineFrame(ind.NonHTData(1):ind.NonHTData(2));
+    rxPSDU = wlanNonHTDataRecover(dataField, H(subcarrier_index), noiseEst, cfgNonHT);
+
+    [cfgMAC, ~, status] = wlanMPDUDecode(rxPSDU, cfgNonHT);
+
+    if strcmp(status, "Success") && matches(cfgMAC.FrameType, "Beacon")
+        fprintf("Beacon received — SSID: %s\n", string(cfgMAC.ManagementConfig.SSID));
+    end
+
+catch ME
+    warning("Beacon verification failed: %s", warning(E. identifier, '%s',E.message));
+end
+
 end
