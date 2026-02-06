@@ -4,7 +4,7 @@ valid = false;
 H = [];
 
 if isempty(rxBuffer)
-    warning("BUFFER EMPTy")
+    warning("BUFFER EMPTY")
     return;
 end
 
