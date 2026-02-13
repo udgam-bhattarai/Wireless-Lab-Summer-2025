@@ -1,17 +1,18 @@
-function [H, valid] = processWiFi(rxBuffer, cfgNonHT)
+function [H, SSID, valid] = processWiFi(rxBuffer, cfgNonHT, trueSSID)
 
 valid = false;
 H = [];
+SSID = "";
 
 if isempty(rxBuffer)
-    warning("BUFFER EMPTy")
+    warning("BUFFER EMPTY")
     return;
 end
 
 rxBuffer = rxBuffer(:);
 
 % ---- Field indices ----
-ind = wlanFieldIndices(cfgNonHT);
+ ind = wlanFieldIndices(cfgNonHT);
 
 % Active subcarriers for 64-FFT Wi-Fi (no DC)
 subcarrier_index = [(7:32) (34:59)];
@@ -31,10 +32,10 @@ if startOffset1 >= (length(rxBuffer) - ind.NonHTData(2))
 end
 
 % ---- Coarse frame (for fine timing + CFO) ----
-coarseFrame = rxBuffer(startOffset1 + (ind.LSTF(1):ind.LSIG(2)));
+% coarseFrame = rxBuffer(startOffset1 + (ind.LSTF(1):ind.LSIG(2)));
 
 % ---- CFO estimate + correction ----
-lstf = coarseFrame(ind.LSTF(1):ind.LSTF(2));
+% lstf = coarseFrame(ind.LSTF(1):ind.LSTF(2));
 % cfo = wlanCoarseCFOEstimate(lstf, 'CBW20');
 % rxBuffer = wlanCoarseCFOCorrect(rxBuffer, 'CBW20', cfo);
 
@@ -44,10 +45,10 @@ coarseFrame = rxBuffer(startOffset1 + (ind.LSTF(1):ind.LSIG(2)));
 % ---- Fine timing ----
 startOffset2 = wlanSymbolTimingEstimate(coarseFrame, 'CBW20');
 
-% if isempty(startOffset2) || startOffset2 < 0
-%     warning("startoffset2 invalid");
-%     return;
-% end
+if isempty(startOffset2) || startOffset2 < 0
+    warning("startoffset2 invalid");
+    startOffset2=0;
+end
 
 if (startOffset1 + startOffset2 + ind.NonHTData(2)) > length(rxBuffer)
     warning("startoffset2 too long");
@@ -69,4 +70,59 @@ H_active = wlanLLTFChannelEstimate(demodLLTF, cfgNonHT);
 H = zeros(64,1,'like',H_active);
 H(subcarrier_index) = H_active;
 valid = true;
+
+% ---- Beacon verification (SSID) ----
+try
+    noiseEst = wlanLLTFNoiseEstimate(demodLLTF);
+
+    dataField = fineFrame(ind.NonHTData(1):ind.NonHTData(2));
+    rxPSDU = wlanNonHTDataRecover(dataField, H(subcarrier_index), noiseEst, cfgNonHT);
+
+    [cfgMAC, ~, status] = wlanMPDUDecode(rxPSDU, cfgNonHT);
+
+    SSID = cfgMAC.ManagementConfig.SSID;
+
+    if strcmp(status, "Success") && matches(cfgMAC.FrameType, "Beacon")
+        if SSID == trueSSID
+            valid = true;
+            fprintf("Beacon received — SSID: %s\n", string(SSID));
+        else
+            valid = False;
+            fprintf("Beacon received -- SSID doesn't match. \n")
+        end
+    else
+        valid = False;
+        fprintf("Beacon not received. \n")
+    end
+
+catch ME
+    warning("Beacon verification failed");
 end
+
+end
+
+% startOffset1 = wlanPacketDetect(rxBuffer, 'CBW20', 0, 0.5);
+% % Detect the packet
+% % if empty no packet detected. if > packet clipped or noise
+% if ~isempty(startOffset1) && startOffset1 < (size(rxBuffer,1) - ind.NonHTData(2)) %beginning index of packet+end index must be less than total data length
+%     idxLLTF = wlanFieldIndices(cfgNonHT, 'L-LTF'); % Calculate the LLTF index points
+%     coarseFrame = rxBuffer(startOffset1 + (ind.LSTF(1):ind.LSIG(2)), :);
+%     startOffset2 = wlanSymbolTimingEstimate(coarseFrame, "CBW20"); % Finer preamble detection
+% 
+%     if startOffset2 >= 0
+%         % If startOffset2 is negative, packet detection likely failed
+%         fineFrame = rxBuffer(startOffset1 + startOffset2 + (ind.LSTF(1):ind.NonHTData(2)), :);
+% 
+%         % Demodulate the LLTF
+%         demodLLTF = wlanLLTFDemodulate(fineFrame(idxLLTF(1):idxLLTF(2), :), cfgNonHT);
+% 
+%         % Get channel estimation
+%         subcarrier_index = [(7:32) (34:59)]; % Subcarrier 32 is DC 0 in Wifi
+%         H(subcarrier_index) = wlanLLTFChannelEstimate(demodLLTF, cfgNonHT); % Channel Estimation LTF
+%         noiseEst = wlanLLTFNoiseEstimate(demodLLTF);
+%         DataField = wlanNonHTDataRecover(fineFrame(ind.NonHTData(1):ind.NonHTData(2),:),H(subcarrier_index),noiseEst,cfgNonHT);
+%         %CRC error check
+%         [cfgMAC,payload,status] = wlanMPDUDecode(DataField,cfgNonHT);
+%         SSID= cfgMAC.ManagementConfig.SSID;    
+%     end
+% end
