@@ -86,12 +86,10 @@ try
 
     if strcmp(status, "Success") && matches(cfgMAC.FrameType, "Beacon")
         if SSID == trueSSID
-            SSID = trueSSID;
             valid = true;
             fprintf("Beacon received — SSID: %s\n", string(SSID));
         else
             valid = false;
-            SSID = "No ssid";
             fprintf("Beacon received -- SSID doesn't match. \n")
         end
     else
