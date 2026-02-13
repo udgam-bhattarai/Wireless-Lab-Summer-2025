@@ -15,7 +15,6 @@ refGrid = nrResourceGrid(carrier, 1);
 refGrid(dmrsInd) = dmrsSym;
 refWaveform = nrOFDMModulate(carrier, refGrid);
 
-
 info = nrOFDMInfo(carrier);
 sampleRate = info.SampleRate;
 
@@ -46,6 +45,8 @@ wifi_rxRadio = comm.SDRuReceiver( ...
     'SamplesPerFrame', 13520*50, ...% keep math simple
     'OutputDataType', 'single');
 figure(1); 
+
+testSSID = "TEST_BEACON";
 %% Capture and Process 5G CSI data
 while true
     disp('Capturing 5G...');
@@ -56,7 +57,7 @@ while true
 
     % Process both buffers
     [H1, valid1] = processNR(rxBuf1, carrier, refGrid, refWaveform, dmrsInd, dmrsSym);
-    [H2, valid2] = processWiFi(rxBuf2, wifi_cfgNonHT);
+    [H2, wifiSSID, valid2] = processWiFi(rxBuf2, wifi_cfgNonHT, testSSID);
 
     % VisualizatioN
     
@@ -77,7 +78,7 @@ while true
     
     if valid2
         plot(20*log10(abs(H2)));
-        title('WiFi Channel Estimate');
+        title("WiFi Channel Estimate, Beacon: " + wifiSSID);
         xlabel('Subcarrier'); ylabel('Magnitude');
         ylim([-50 30]);
         grid on;
