@@ -1,0 +1,41 @@
+clc; clear;
+receive = false;
+nrb = 20;
+scs = 15;
+ncellid = 42;
+ibar_SSB = 0;
+carrier = nrCarrierConfig('NSizeGrid',nrb,'SubcarrierSpacing',scs);
+dmrsSym = nrPBCHDMRS(ncellid,ibar_SSB);
+dmrsInd = nrPBCHDMRSIndices(ncellid);
+usrp = findsdru;
+
+if (~receive)
+    txGrid = nrResourceGrid(carrier, 1);
+    txGrid(dmrsInd) = dmrsSym;
+
+    % Modulate
+    txWaveform = nrOFDMModulate(carrier, txGrid);
+
+    info = nrOFDMInfo(carrier);
+    sampleRate = info.SampleRate;
+
+    txRadio = comm.SDRuTransmitter(...
+        'Platform',             usrp.Platform, ...
+        'SerialNum',            usrp.SerialNum,...
+        'ChannelMapping',       1, ...
+        'CenterFrequency',      5e9, ...
+        'Gain',                 75, ...       
+        'MasterClockRate',      30.72e6, ...  
+        'InterpolationFactor',  30.72e6 / sampleRate);
+
+
+    % Scale waveform to prevent clipping on USRP
+    txWaveform = txWaveform / max(abs(txWaveform));
+
+    for i = 1:10000000
+        txRadio(txWaveform);
+        disp(1/i);
+    end
+
+
+end

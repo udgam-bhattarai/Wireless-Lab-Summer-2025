@@ -1,5 +1,5 @@
 clc; clear;
-receive = true;
+receive = false;
 nrb = 20;
 scs = 15;
 ncellid = 42;
@@ -23,16 +23,16 @@ if (~receive)
         'Platform',             usrp.Platform, ...
         'SerialNum',            usrp.SerialNum,...
         'ChannelMapping',       1, ...
-        'CenterFrequency',      2.4e9, ...
-        'Gain',                 30, ...       % High gain for detection
-        'MasterClockRate',      30.72e6, ...  % Standard 4G/5G clock
+        'CenterFrequency',      5e9, ...
+        'Gain',                 75, ...       
+        'MasterClockRate',      30.72e6, ...  
         'InterpolationFactor',  30.72e6 / sampleRate);
 
 
     % Scale waveform to prevent clipping on USRP
     txWaveform = txWaveform / max(abs(txWaveform));
 
-    for i = 1:1000
+    for i = 1:100000
         txRadio(txWaveform);
         disp(1/i);
     end
