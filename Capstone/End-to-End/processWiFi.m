@@ -9,7 +9,7 @@ if isempty(rxBuffer)
     return;
 end
 
-rxBuffer = rxBuffer(:);
+% rxBuffer = rxBuffer(:);
 
 % ---- Field indices ----
  ind = wlanFieldIndices(cfgNonHT);
@@ -45,29 +45,31 @@ coarseFrame = rxBuffer(startOffset1 + (ind.LSTF(1):ind.LSIG(2)));
 % ---- Fine timing ----
 startOffset2 = wlanSymbolTimingEstimate(coarseFrame, 'CBW20');
 
-if isempty(startOffset2) || startOffset2 < 0
+if startOffset2 < 0
     warning("startoffset2 invalid");
     startOffset2=0;
 end
 
 if (startOffset1 + startOffset2 + ind.NonHTData(2)) > length(rxBuffer)
     warning("startoffset2 too long");
-    return;
+    % return
 end
 
-fineFrame = rxBuffer(startOffset1 + startOffset2 + ...
-    (ind.LSTF(1):ind.NonHTData(2)));
+% fineFrame = rxBuffer(startOffset1 + startOffset2 + ...
+%     (ind.LSTF(1):ind.NonHTData(2)));
+fineFrame = rxBuffer(startOffset1 + startOffset2 + (ind.LSTF(1):ind.NonHTData(2)), :);
 
 % ---- L-LTF demod ----
 idxLLTF = wlanFieldIndices(cfgNonHT, 'L-LTF');
 
 
-demodLLTF = wlanLLTFDemodulate(fineFrame(idxLLTF(1):idxLLTF(2)), cfgNonHT);
+% demodLLTF = wlanLLTFDemodulate(fineFrame(idxLLTF(1):idxLLTF(2)), cfgNonHT);
+demodLLTF = wlanLLTFDemodulate(fineFrame(idxLLTF(1):idxLLTF(2), :), cfgNonHT);
 
 % ---- Channel estimate ----
 H_active = wlanLLTFChannelEstimate(demodLLTF, cfgNonHT);
 
-H = zeros(64,1,'like',H_active);
+H = zeros(64,1);
 H(subcarrier_index) = H_active;
 valid = true;
 
@@ -84,16 +86,16 @@ try
 
     if strcmp(status, "Success") && matches(cfgMAC.FrameType, "Beacon")
         if SSID == trueSSID
-            SSID=trueSSID;
+            SSID = trueSSID;
             valid = true;
             fprintf("Beacon received — SSID: %s\n", string(SSID));
         else
-            valid = False;
-            SSID="whateva";
+            valid = false;
+            SSID = "No ssid";
             fprintf("Beacon received -- SSID doesn't match. \n")
         end
     else
-        valid = False;
+        valid = false;
         fprintf("Beacon not received. \n")
     end
 
