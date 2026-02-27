@@ -15,9 +15,6 @@ const int LIM_Y_BOT = 9;   // Home Y
 const int LIM_X_1 = 8;     // Home X
 const int LIM_X_2 = 7;     // Max X
 
-
-
-// --- OBJECTS ---
 AccelStepper stepperX(1, STEP_PIN_X, DIR_PIN_X);
 AccelStepper stepperY(1, STEP_PIN_Y, DIR_PIN_Y);
 
@@ -247,12 +244,9 @@ delay(500);
 
 void loop() {
 
-
   if (emergencyTriggered) {
     Serial.print("CRITICAL STOP! Pin: ");
     Serial.println(triggeredPin);
-
-
     if (triggeredPin == LIM_Y_TOP) {
       performRecovery(stepperY, -1, LIM_Y_TOP, MAX_POS_Y);
     } else if (triggeredPin == LIM_Y_BOT) {
@@ -322,25 +316,18 @@ void performRecovery(AccelStepper &motor, int direction, int limitSwitchPin, lon
 
   // 3. SAFETY BUFFER
   if (isReleased) {
-    // Move an extra 100 steps for safety clearance
     long safetyBuffer = 100 * direction;
     motor.move(safetyBuffer);
     motor.runToPosition();
     totalStepsMoved += safetyBuffer;
-
-    // 4. CRITICAL FIX: OVERWRITE POSITION
-    // We know exactly where the switch is (limitHitPosition).
-    // We know exactly how far we moved away from it (totalStepsMoved).
-    // So: Current Position = Switch Location + Distance Moved
     motor.setCurrentPosition(limitHitPosition + totalStepsMoved);
-
     Serial.print("RECOVERY COMPLETE. Position forced to: ");
     Serial.println(limitHitPosition + totalStepsMoved);
   } else {
     Serial.println("CRITICAL FAILURE: Switch stuck closed!");
   }
 }
-// --- SERIAL HELPERS WITH SOFTWARE LIMITS ---
+
 void serialEvent() {
   while (Serial.available()) {
     char inChar = (char)Serial.read();
