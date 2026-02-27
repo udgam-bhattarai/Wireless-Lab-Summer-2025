@@ -1,32 +1,32 @@
-function [H, valid] = processNR(rxBuffer, carrier, refGrid, refWaveform, dmrsInd, dmrsSym)
+function [H, valid] = processNR(rxBuffer, carrier, refGrid, refWaveform, ind, sym)
 
-    valid = false;
-    H = [];
+valid = false;
+H = [];
 
-    % Timing estimation
-    [t, mag] = nrTimingEstimate(carrier, rxBuffer, refGrid);
+% Timing estimation
+[t, mag] = nrTimingEstimate(carrier, rxBuffer, refGrid);
 
-    if mag(t) < 0.1
-        warning('Signal not found. Check Tx is running and Gains are high.');
-        return;
-    end
+if mag(t) < 0.1
+    warning('Signal not found. Check Tx is running and Gains are high.');
+    return;
+end
 
-    % Timing correction
-    rxWaveformSync = rxBuffer(1+t:end);
-    samplesPerSlot = length(refWaveform);
+% Timing correction
+rxWaveformSync = rxBuffer(1+t:end);
+samplesPerSlot = length(refWaveform);
 
-    if length(rxWaveformSync) < samplesPerSlot
-        warning('Not enough samples left after sync.');
-        return;
-    end
+if length(rxWaveformSync) < samplesPerSlot
+    warning('Not enough samples left after sync.');
+    return;
+end
 
-    rxWaveformCut = rxWaveformSync(1:samplesPerSlot);
+rxWaveformCut = rxWaveformSync(1:samplesPerSlot);
 
-    % OFDM demod
-    rxGrid = nrOFDMDemodulate(carrier, rxWaveformCut);
+% OFDM demod
+rxGrid = nrOFDMDemodulate(carrier, rxWaveformCut);
 
-    % Channel estimate
-    [H, ~] = nrChannelEstimate(rxGrid, dmrsInd, dmrsSym);
+% Channel estimate
+[H, ~] = nrChannelEstimate(rxGrid, ind, sym);
 
-    valid = true;
+valid = true;
 end

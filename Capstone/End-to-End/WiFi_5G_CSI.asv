@@ -48,7 +48,7 @@ while true
     rxBuf2 = wifi_rxRadio();
 
     % Process both buffers
-    [H1, valid1] = processNR(rxBuf1, carrier, refGrid, refWaveform, ind, sym);
+    [H1, valid1] = processNR(rxBuf1, carrier, refGrid, refWaveform, ind, sym, csirs);
 
     [H2, valid2] = processWiFi(rxBuf2, wifi_cfgNonHT);
 

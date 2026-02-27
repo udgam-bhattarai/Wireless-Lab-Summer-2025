@@ -33,12 +33,13 @@ fiveG_rxRadio = comm.SDRuReceiver( ...
 
 
 figure('Name', 'Real-Time 5G Radar', 'NumberTitle', 'off');
-hImage = imagesc(zeros(240, 14));
+hImage = imagesc(zeros(144 * 4, 2 * 16));
 colormap('jet');
 colorbar;
 title('Live 5G CSI Range-Doppler Map');
 xlabel('Doppler Axis (Symbols)');
 ylabel('Range Axis (Subcarriers)');
+clim([-80 0]);
 while true
   
     rxBuf1 = fiveG_rxRadio();
@@ -46,11 +47,25 @@ while true
 
     if valid1  
         disp('Valid');
-         H1 = H1 -mean(H1,2);
-        range_matrix = ifft(H1, [], 1);
-        doppler_matrix = fft(range_matrix, [], 2);
-        shifted_matrix = fftshift(doppler_matrix, 2);
-        magnitude_matrix = 20*log10(abs(shifted_matrix)+ 1e-9);
+         % H1 = H1 -mean(H1,2);
+
+        H1_pilots = zeros(size(H1));
+        H1_pilots(dmrsInd) = H1(dmrsInd);
+
+        i_col = floor(double(dmrsInd)./size(H1,1))+1;
+        i_row = mod(double(dmrsInd),size(H1,1));
+
+        H1_pilots = H1_pilots(:,2);
+        H1_pilots = H1_pilots(i_row,:);
+
+ 
+        range_matrix = (ifft(H1_pilots,size(H1_pilots,1) * 4));
+        doppler_matrix = fftshift((ifft(range_matrix.',size(H1_pilots,2) * 16)).');
+        
+        % range_matrix = ifft(H1_pilots, [], 1);
+        % doppler_matrix = fft(range_matrix, [], 2);
+        % shifted_matrix = fftshift(doppler_matrix, 2);
+        magnitude_matrix = 20*log10(abs(doppler_matrix));
         set(hImage, 'CData', magnitude_matrix);
         drawnow limitrate;
         pause(0.01);
