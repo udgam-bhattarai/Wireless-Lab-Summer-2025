@@ -27,6 +27,6 @@ function [H, valid] = processNR(rxBuffer, carrier, refGrid, refWaveform, dmrsInd
 
     % Channel estimate
     [H, ~] = nrChannelEstimate(rxGrid, dmrsInd, dmrsSym);
-
+        
     valid = true;
 end
