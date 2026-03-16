@@ -10,6 +10,7 @@ Open both .m files and ensure your desired codefile is in the correct MATLAB pat
 [Need to talk about declaring the object]
 
 #Error handling in MATLAB
+
 If the function hangs when you try to call it, try changing the COM PORT (4 or 6). If there is a serial error, ensure you do not have the Arduino File open in the background. If the code is running and the system is not responding, try re-uploading the arduino code, then closing the Arduino IDE and re-running the MATLAB code. Please note that when you re-initialize the code or declare the object again in matlab the homing sequence will run again.
 
 
