@@ -1,1 +1,1 @@
-Please download the folder Arduino Control Homing.This is the most up to date version of the code that includes a homing sequence that checks whether the switches are running and then returns to a start position
+
