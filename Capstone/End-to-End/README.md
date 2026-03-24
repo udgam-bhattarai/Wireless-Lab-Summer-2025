@@ -44,5 +44,5 @@ The final stage of the receiver provides:
 ---
 
 ##  How to Run
-1. Run the desired Transmitter script to generate signal data.
+1. Run both the Transmitter script to generate and transmit signal data.
 2. Execute `WiFi_5G_CSI.m` to begin the reception and estimation process.
