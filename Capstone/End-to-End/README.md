@@ -7,7 +7,7 @@ This project implements a dual-standard processing chain for WiFi and 5G signals
 ## Project Files
 
 ### Transmitters (TX)
-* **WiFi TX:** [WiFi_Transmit.m](WiFi_Transmit.m) — Generates the WiFi signal.
+* **WiFi TX:** [WiFi_Transmit.m](Wifi_Transmit.m) — Generates the WiFi signal.
 * **5G TX:** [NR_Transmit.m](NR_Transmit.m) — Generates the 5G NR signal.
 
 ### Receivers (RX)
