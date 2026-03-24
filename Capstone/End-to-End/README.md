@@ -4,7 +4,7 @@ This project implements a dual-standard processing chain for WiFi and 5G signals
 
 ---
 
-## 📂 Project Files
+## Project Files
 
 ### Transmitters (TX)
 * **WiFi TX:** [WiFi_Transmit.m](WiFi_Transmit.m) — Generates the WiFi signal.
@@ -17,7 +17,7 @@ This project implements a dual-standard processing chain for WiFi and 5G signals
 
 ---
 
-## ⚙️ System Workflow
+## System Workflow
 
 <image src="Capstone_MultiRAT.drawio.png" ></image>
 
@@ -43,7 +43,6 @@ The final stage of the receiver provides:
 
 ---
 
-## 🚀 How to Run
-1. Ensure all `.m` files are in the same directory.
-2. Run the desired Transmitter script to generate signal data.
-3. Execute `WiFi_5G_CSI.m` to begin the reception and estimation process.
+##  How to Run
+1. Run the desired Transmitter script to generate signal data.
+2. Execute `WiFi_5G_CSI.m` to begin the reception and estimation process.
